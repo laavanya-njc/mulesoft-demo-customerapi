@@ -8,12 +8,12 @@ http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/htt
 http://www.mulesoft.org/schema/mule/stripe http://www.mulesoft.org/schema/mule/stripe/current/mule-stripe.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
 
-	<stripe:config name="Stripe_Connector_Config" doc:name="Stripe Connector Config" doc:id="edf0b82c-c3c4-43a7-91d4-b1089951bf59" >
-		<stripe:api-key-connection authorization="${paymentsprocessor.authorizationkey}" />
+	<stripe:config name="stripeConnectorConfig" doc:name="Stripe Connector Config" doc:id="edf0b82c-c3c4-43a7-91d4-b1089951bf59" >
+		<stripe:api-key-connection authorization="${secure::paymentsprocessor.authorizationkey}" />
 	</stripe:config>
-	<flow name="CreateCustomerPayment" doc:id="283597fd-35e2-46bf-8717-6cea1af40792" >
-		<amqp:listener doc:name="Consume from customer.create.payments" doc:id="86d9048c-f5fa-4987-8ca7-68f0e2470573" config-ref="AMQP_Config" queueName="${customercreate-queues.payments}"/>
-		<logger level="INFO" doc:name="Logger" doc:id="28a73ba1-5c04-44bb-bc55-b30117fb5127" message="Consumer: CustomerCreatePayment"/>
+	<flow name="create-customer-payment" doc:id="283597fd-35e2-46bf-8717-6cea1af40792" >
+		<amqp:listener doc:name="Consume from customer.create.payments" doc:id="86d9048c-f5fa-4987-8ca7-68f0e2470573" config-ref="amqpConfig" queueName="${customercreate-queues.payments}"/>
+		<logger level="INFO" doc:name="Log entry create-customer-payment" doc:id="28a73ba1-5c04-44bb-bc55-b30117fb5127" message='#[output application/json --- {flow: "create-customer-payment", event: "ENTRY", correlationId: correlationId, message: "Consumer: CustomerCreatePayment"}]'/>
 		<ee:transform doc:name="Set Stripe Payload" doc:id="2a95d161-980e-411c-8b38-0d68c65c34c7" >
 			<ee:variables >
 				<ee:set-variable variableName="stripePayload" ><![CDATA[%dw 2.0
@@ -38,10 +38,13 @@ default "") ++ " " ++ payload.lastName
 ]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-		<logger level="INFO" doc:name="Logger" doc:id="d881e7c7-6588-4fc9-be22-da478327a4a0" message="Customer Stripe: #[vars.stripePayload]"/>
-		<stripe:create-v1-customers doc:name="Create a customer" doc:id="86ae27d1-5298-4f4f-83a7-a8fe031bbdbc" config-ref="Stripe_Connector_Config">
-			<ee:repeatable-file-store-stream bufferUnit="MB" />
-			<stripe:create-customer-content ><![CDATA[#[vars.stripePayload]]]></stripe:create-customer-content>
-		</stripe:create-v1-customers>
+		<logger level="INFO" doc:name="Log Stripe payload prepared" doc:id="d881e7c7-6588-4fc9-be22-da478327a4a0" message='#[output application/json --- {flow: "create-customer-payment", event: "STRIPE_PAYLOAD_PREPARED", correlationId: correlationId, message: "Stripe customer payload prepared"}]'/>
+		<until-successful maxRetries="3" millisBetweenRetries="2000" doc:name="Until Successful">
+			<stripe:create-v1-customers doc:name="Create a customer" doc:id="86ae27d1-5298-4f4f-83a7-a8fe031bbdbc" config-ref="stripeConnectorConfig">
+				<ee:repeatable-file-store-stream bufferUnit="MB" />
+				<stripe:create-customer-content ><![CDATA[#[vars.stripePayload]]]></stripe:create-customer-content>
+			</stripe:create-v1-customers>
+		</until-successful>
+		<logger level="INFO" doc:name="Log exit create-customer-payment" doc:id="a7c3e1b2-5d4f-4a6b-9c8d-1e2f3a4b5c6d" message='#[output application/json --- {flow: "create-customer-payment", event: "EXIT", correlationId: correlationId, message: "Customer created in Stripe"}]'/>
 	</flow>
 </mule>
