@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<munit:config name="customer-api-test-suite.xml" />
+
+	<munit:test name="post-customers-publishes-and-returns-identifier-test" description="Valid customer is published and an identifier is returned">
+		<munit:behavior>
+			<munit-tools:mock-when processor="amqp:publish" />
+			<munit:set-event>
+				<munit:payload value="#[readUrl('classpath://examples/customer.json')]" mediaType="application/json" />
+			</munit:set-event>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref name="post:\customers:application\json:customer-api-config" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that expression="#[payload.identifier]" is="#[MunitTools::notNullValue()]" />
+			<munit-tools:verify-call processor="amqp:publish" times="1" />
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="post-customers-missing-billing-address-test" description="Customer without billing address fails validation" expectedErrorType="VALIDATION:INVALID_BOOLEAN">
+		<munit:behavior>
+			<munit-tools:mock-when processor="amqp:publish" />
+			<munit:set-event>
+				<munit:payload value='#[{customerId: "1", firstName: "John", lastName: "Doe", phone: "+1-202-555-0180", email: "john.doe@example.com", deliveryAddresses: [{"type": "SHIPPING", address: "44 Shirley Ave.", city: "West Chicago", postalCode: "60185", state: "IL", country: "USA"}]}]' mediaType="application/json" />
+			</munit:set-event>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref name="post:\customers:application\json:customer-api-config" />
+		</munit:execution>
+	</munit:test>
+
+</mule>
